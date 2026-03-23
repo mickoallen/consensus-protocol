@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --bg: #f5eed6;
+  --bg-card: #fff8e7;
+  --bg-card-hover: #fff3d4;
+  --border: #c4a265;
+  --border-light: #dbc89e;
+  --text: #3d2b1f;
+  --text-muted: #7a6552;
+  --accent: #8b4513;
+  --parchment: #faf0d7;
+}
+
+body {
+  margin: 0;
+  background-color: var(--bg);
+  color: var(--text);
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.font-pixel {
+  font-family: 'Press Start 2P', monospace;
+}
+
+/* Parchment texture */
+.parchment-bg {
+  background-color: var(--parchment);
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(139, 69, 19, 0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(139, 69, 19, 0.03) 0%, transparent 50%);
+}
+
+/* Blinking cursor for speech */
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.cursor-blink::after {
+  content: '|';
+  animation: blink 0.8s step-end infinite;
+  color: var(--accent);
+  margin-left: 1px;
+  font-weight: bold;
+}
+
+/* Talking bounce */
+@keyframes talk-bounce {
+  0%, 100% { transform: translateY(0); }
+  25% { transform: translateY(-3px); }
+  75% { transform: translateY(1px); }
+}
+
+.talking {
+  animation: talk-bounce 0.4s ease-in-out infinite;
+}
+
+/* Mind change flash */
+@keyframes mind-flash {
+  0% { background-color: #fef3c7; }
+  50% { background-color: #fde68a; }
+  100% { background-color: #fef3c7; }
+}
+
+.mind-changed {
+  animation: mind-flash 0.5s ease-in-out 3;
+}
+
+/* Scroll entrance */
+@keyframes scroll-unroll {
+  0% { max-height: 0; opacity: 0; }
+  100% { max-height: 500px; opacity: 1; }
+}
+
+.scroll-enter {
+  animation: scroll-unroll 0.5s ease-out;
+  overflow: hidden;
+}
+
+/* Connection lines */
+@keyframes flow-dash {
+  to { stroke-dashoffset: -16; }
+}
+
+.flow-line {
+  stroke-dasharray: 6 3;
+  animation: flow-dash 0.8s linear infinite;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: var(--accent); }

@@ -1,0 +1,19 @@
+# Build artifacts
+build/bin/
+consensus-protocol
+
+# Database
+consensus.db
+
+# User settings (contains API keys)
+settings.json
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Wails
+frontend/wailsjs/
+
+# OS
+.DS_Store
