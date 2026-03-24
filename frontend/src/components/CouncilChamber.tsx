@@ -8,6 +8,8 @@ interface CouncilChamberProps {
   agents: Map<number, AgentState>;
   currentRound: number;
   currentSpeaker: number | null;
+  summariesUpdatingSpeaker: number | null;
+  listeningAgents: Set<number>;
   onAgentClick: (agentId: number) => void;
 }
 
@@ -109,7 +111,7 @@ const bubbleStyles = {
   error: { bg: '#fef2f2', borderColor: 'cc', textColor: '#991b1b' },
 };
 
-export default function CouncilChamber({ agents, currentRound, currentSpeaker, onAgentClick }: CouncilChamberProps) {
+export default function CouncilChamber({ agents, currentRound, currentSpeaker, summariesUpdatingSpeaker, listeningAgents, onAgentClick }: CouncilChamberProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const agentArray = useMemo(() => Array.from(agents.values()), [agents]);
   const [chamberSize, setChamberSize] = useState({ w: 800, h: 450 });
@@ -159,6 +161,7 @@ export default function CouncilChamber({ agents, currentRound, currentSpeaker, o
           const isDone = round?.done;
           const hasVoted = agent.finalVote !== null;
           const changedMind = agent.finalVote?.changed_mind;
+          const isListening = listeningAgents.has(agent.id);
 
           // Direction: face toward center
           const centerX = chamberSize.w / 2;
@@ -230,6 +233,35 @@ export default function CouncilChamber({ agents, currentRound, currentSpeaker, o
                   <div
                     className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border-r-2 border-b-2"
                     style={{ backgroundColor: bStyle.bg, borderColor: agent.color + bStyle.borderColor }}
+                  />
+                </motion.div>
+              )}
+
+              {/* Listening indicator during summary updates */}
+              {isListening && !speech && (
+                <motion.div
+                  className="absolute bottom-[84px] left-1/2 -translate-x-1/2 whitespace-nowrap rounded-lg border-2 px-2.5 py-1.5 shadow-md"
+                  style={{
+                    backgroundColor: '#fefce8',
+                    borderColor: agent.color + '60',
+                    zIndex: 1000,
+                  }}
+                  initial={{ opacity: 0, y: 5, scale: 0.8 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.8 }}
+                  key="listening"
+                >
+                  <div className="text-[9px] font-medium" style={{ color: '#854d0e' }}>
+                    <motion.span
+                      animate={{ opacity: [0.4, 1, 0.4] }}
+                      transition={{ duration: 1.5, repeat: Infinity }}
+                    >
+                      Listening...
+                    </motion.span>
+                  </div>
+                  <div
+                    className="absolute -bottom-[7px] left-1/2 -translate-x-1/2 w-3 h-3 rotate-45 border-r-2 border-b-2"
+                    style={{ backgroundColor: '#fefce8', borderColor: agent.color + '60' }}
                   />
                 </motion.div>
               )}

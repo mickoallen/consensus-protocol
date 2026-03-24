@@ -2,12 +2,6 @@
 build/bin/
 consensus-protocol
 
-# Database
-consensus.db
-
-# User settings (contains API keys)
-settings.json
-
 # Frontend
 frontend/node_modules/
 frontend/dist/

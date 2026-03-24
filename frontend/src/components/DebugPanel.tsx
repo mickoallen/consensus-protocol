@@ -218,7 +218,7 @@ function ConversationsView({ entries }: { entries: DebugEntry[] }) {
     <div className="space-y-2 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 140px)' }}>
       {Array.from(agentConversations.entries()).map(([name, agentEntries]) => {
         const isExpanded = expandedAgent === name;
-        const errorCount = agentEntries.filter(e => e.data.error).length;
+        const errorCount = agentEntries.filter(e => e.data?.error).length;
         const rounds = new Set(agentEntries.map(e => e.round).filter(Boolean));
         return (
           <div key={name} className="rounded border" style={{ borderColor: '#e5d5b0', backgroundColor: '#fff' }}>
@@ -277,7 +277,7 @@ function ConversationsView({ entries }: { entries: DebugEntry[] }) {
 
 function ErrorsView({ entries }: { entries: DebugEntry[] }) {
   const errors = useMemo(() =>
-    entries.filter(e => e.data.error || e.event === 'agent:error' || e.event === 'swarm:error'),
+    entries.filter(e => e.data?.error || e.event === 'agent:error' || e.event === 'swarm:error'),
     [entries]
   );
 
@@ -311,7 +311,7 @@ function ErrorsView({ entries }: { entries: DebugEntry[] }) {
 export default function DebugPanel({ isOpen, onClose, entries, isRunning, onCancel, onRetry }: DebugPanelProps) {
   const [tab, setTab] = useState<TabId>('timeline');
   const errorCount = useMemo(() =>
-    entries.filter(e => e.data.error || e.event === 'agent:error' || e.event === 'swarm:error').length,
+    entries.filter(e => e.data?.error || e.event === 'agent:error' || e.event === 'swarm:error').length,
     [entries]
   );
 

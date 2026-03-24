@@ -67,6 +67,8 @@ export interface SwarmState {
   agents: Map<number, AgentState>;
   groups: GroupAssignment[] | null;
   currentSpeaker: number | null;
+  summariesUpdatingSpeaker: number | null;
+  listeningAgents: Set<number>;
   consensusText: string;
   synthesisLevel: number;
   synthesisTotalLevels: number;

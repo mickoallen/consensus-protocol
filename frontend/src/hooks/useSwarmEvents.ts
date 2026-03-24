@@ -13,6 +13,8 @@ const initialState: SwarmState = {
   agents: new Map(),
   groups: null,
   currentSpeaker: null,
+  summariesUpdatingSpeaker: null,
+  listeningAgents: new Set<number>(),
   consensusText: '',
   synthesisLevel: 0,
   synthesisTotalLevels: 0,
@@ -53,6 +55,7 @@ const EVENT_TYPES = [
   'debug:request', 'debug:response',
   'agent:thinking', 'agent:done', 'agent:error', 'agent:voted',
   'groups:assigned', 'speaker:start', 'summaries:updating', 'summaries:updated',
+  'summary:listener:start', 'summary:listener:done',
   'synthesis:start', 'synthesis:thinking',
   'consensus:token', 'consensus:ready',
 ];
@@ -154,10 +157,27 @@ function processEvent(
       break;
 
     case 'summaries:updating':
+      setState(prev => ({ ...prev, summariesUpdatingSpeaker: data.speaker_id }));
       break;
 
     case 'summaries:updated':
-      setState(prev => ({ ...prev, currentSpeaker: null }));
+      setState(prev => ({ ...prev, currentSpeaker: null, summariesUpdatingSpeaker: null, listeningAgents: new Set() }));
+      break;
+
+    case 'summary:listener:start':
+      setState(prev => {
+        const next = new Set(prev.listeningAgents);
+        next.add(data.agent_id as number);
+        return { ...prev, listeningAgents: next };
+      });
+      break;
+
+    case 'summary:listener:done':
+      setState(prev => {
+        const next = new Set(prev.listeningAgents);
+        next.delete(data.agent_id as number);
+        return { ...prev, listeningAgents: next };
+      });
       break;
 
     case 'debug:request':

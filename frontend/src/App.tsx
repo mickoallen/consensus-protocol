@@ -6,6 +6,7 @@ import CouncilChamber from './components/CouncilChamber';
 import RoundIndicator from './components/RoundIndicator';
 import ConsensusPanel from './components/ConsensusPanel';
 import MinorityReport from './components/MinorityReport';
+import MindChangeSpotlight from './components/MindChangeSpotlight';
 import AgentDetailModal from './components/AgentDetailModal';
 import CouncilComposer from './components/CouncilComposer';
 import RunSettings from './components/RunSettings';
@@ -205,30 +206,6 @@ export default function App() {
 
               {hasAgents && <RoundIndicator currentRound={state.round} phase={state.phase} />}
 
-              {state.phase === 'running' && (
-                <div className="text-center mb-4">
-                  <button
-                    onClick={() => { cancel(); handleReset(); }}
-                    className="text-xs hover:underline transition-colors"
-                    style={{ color: '#b0956e' }}
-                  >
-                    Dismiss the council
-                  </button>
-                </div>
-              )}
-
-              {hasAgents && (
-                <CouncilChamber
-                  agents={state.agents}
-                  currentRound={state.round}
-                  currentSpeaker={state.currentSpeaker}
-                  onAgentClick={(id) => {
-                    const agent = state.agents.get(id);
-                    if (agent) setSelectedAgent(agent);
-                  }}
-                />
-              )}
-
               {state.statusMessage && (
                 <motion.div
                   className="mt-4 mb-2 text-center py-3 px-6 rounded-lg border-2"
@@ -254,11 +231,41 @@ export default function App() {
                 </motion.div>
               )}
 
+              {hasAgents && (
+                <CouncilChamber
+                  agents={state.agents}
+                  currentRound={state.round}
+                  currentSpeaker={state.currentSpeaker}
+                  summariesUpdatingSpeaker={state.summariesUpdatingSpeaker}
+                  listeningAgents={state.listeningAgents}
+                  onAgentClick={(id) => {
+                    const agent = state.agents.get(id);
+                    if (agent) setSelectedAgent(agent);
+                  }}
+                />
+              )}
+
+              {state.phase === 'running' && (
+                <div className="text-center mb-4">
+                  <button
+                    onClick={() => { cancel(); handleReset(); }}
+                    className="text-xs hover:underline transition-colors"
+                    style={{ color: '#b0956e' }}
+                  >
+                    Dismiss the council
+                  </button>
+                </div>
+              )}
+
               {state.consensusText && (
                 <ConsensusPanel text={state.consensusText} isStreaming={state.phase === 'running'} />
               )}
 
               {view === 'complete' && state.result && <MinorityReport result={state.result} />}
+
+              {view === 'complete' && state.agents.size > 0 && (
+                <MindChangeSpotlight agents={state.agents} />
+              )}
 
               {view === 'complete' && (
                 <div className="mt-6 text-center space-y-3">
@@ -306,12 +313,12 @@ export default function App() {
           onClick={() => setDebugOpen(true)}
           className="fixed bottom-4 right-4 z-40 px-3 py-1.5 rounded-lg border-2 text-xs font-mono transition-all hover:shadow-md"
           style={{
-            borderColor: state.debugLog.some(e => e.data.error) ? '#dc2626' : '#c4a265',
-            backgroundColor: state.debugLog.some(e => e.data.error) ? '#fef2f2' : '#fffdf5',
-            color: state.debugLog.some(e => e.data.error) ? '#dc2626' : '#8b4513',
+            borderColor: state.debugLog.some(e => e.data?.error) ? '#dc2626' : '#c4a265',
+            backgroundColor: state.debugLog.some(e => e.data?.error) ? '#fef2f2' : '#fffdf5',
+            color: state.debugLog.some(e => e.data?.error) ? '#dc2626' : '#8b4513',
           }}
         >
-          {state.debugLog.some(e => e.data.error) ? '! ' : ''}Debug ({state.debugLog.length})
+          {state.debugLog.some(e => e.data?.error) ? '! ' : ''}Debug ({state.debugLog.length})
         </button>
       )}
     </div>

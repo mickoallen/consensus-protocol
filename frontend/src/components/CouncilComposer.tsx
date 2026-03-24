@@ -56,10 +56,86 @@ function pickRandom<T>(arr: T[], n: number): T[] {
   return shuffled.slice(0, Math.min(n, arr.length));
 }
 
+/* ── Add-persona modal ── */
+function PersonaAddModal({
+  category,
+  personas,
+  selectedSlugs,
+  onSelect,
+  onClose,
+}: {
+  category: string;
+  personas: PersonaInfo[];
+  selectedSlugs: Set<string>;
+  onSelect: (slug: string) => void;
+  onClose: () => void;
+}) {
+  const available = personas.filter(p => p.category === category);
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-[1000] flex items-center justify-center p-4"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="absolute inset-0"
+        style={{ backgroundColor: 'rgba(61, 43, 31, 0.4)' }}
+        onClick={onClose}
+      />
+      <motion.div
+        className="relative rounded-xl border-2 shadow-xl w-full max-w-md max-h-[70vh] overflow-y-auto"
+        style={{ borderColor: '#dbc89e', backgroundColor: '#fff8e7' }}
+        initial={{ scale: 0.9, y: 20 }}
+        animate={{ scale: 1, y: 0 }}
+        exit={{ scale: 0.9, y: 20 }}
+      >
+        <div className="px-4 py-3 border-b" style={{ borderColor: '#dbc89e' }}>
+          <h3 className="font-pixel text-xs" style={{ color: '#8b4513' }}>
+            Add from {CATEGORY_LABELS[category] || category}
+          </h3>
+        </div>
+        <div className="p-3 grid grid-cols-2 gap-2">
+          {available.map(p => {
+            const already = selectedSlugs.has(p.slug);
+            return (
+              <button
+                key={p.slug}
+                onClick={() => { if (!already) { onSelect(p.slug); onClose(); } }}
+                disabled={already}
+                className={`flex items-center gap-2 p-2 rounded-lg border text-left transition-all ${
+                  already ? 'opacity-40 cursor-default' : 'hover:bg-white cursor-pointer'
+                }`}
+                style={{
+                  borderColor: already ? p.color + '40' : '#dbc89e',
+                  backgroundColor: already ? p.color + '10' : 'transparent',
+                }}
+              >
+                <PixelSprite persona={p.avatar} color={p.color} size={32} />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[10px] font-bold truncate" style={{ color: '#3d2b1f' }}>
+                    {p.name}
+                  </div>
+                  {already && (
+                    <div className="text-[8px]" style={{ color: '#7a6552' }}>Already in council</div>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+}
+
+/* ── Main component ── */
 export default function CouncilComposer({ personas, onCountsChange }: CouncilComposerProps) {
   const [totalAgents, setTotalAgents] = useState(6);
-  const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const [rerollKey, setRerollKey] = useState(0);
+  const [activeTab, setActiveTab] = useState(CATEGORY_ORDER[0]);
+  const [addModalCategory, setAddModalCategory] = useState<string | null>(null);
 
   const grouped = useMemo(() => {
     const map = new Map<string, PersonaInfo[]>();
@@ -82,17 +158,14 @@ export default function CouncilComposer({ personas, onCountsChange }: CouncilCom
     return w;
   });
 
-  // Locked personas (manually toggled on/off)
   const [locked, setLocked] = useState<Record<string, boolean>>({});
 
-  // Compute selected personas (unique, no duplicates)
   const computedCounts = useMemo(() => {
     const catWeightArr = categories.map(c => categoryWeights[c] || 0);
     const catCounts = distributeCount(totalAgents, catWeightArr);
 
     const counts: Record<string, number> = {};
 
-    // First, include all locked-on personas
     const lockedOn = new Set<string>();
     const lockedOff = new Set<string>();
     for (const [slug, val] of Object.entries(locked)) {
@@ -100,7 +173,6 @@ export default function CouncilComposer({ personas, onCountsChange }: CouncilCom
       else lockedOff.add(slug);
     }
 
-    // Count locked personas per category
     const lockedPerCat: Record<string, string[]> = {};
     for (const slug of lockedOn) {
       const p = personas.find(pp => pp.slug === slug);
@@ -110,7 +182,6 @@ export default function CouncilComposer({ personas, onCountsChange }: CouncilCom
       }
     }
 
-    // Fill remaining slots per category with random picks
     categories.forEach((cat, ci) => {
       const members = grouped.get(cat) || [];
       const lockedInCat = lockedPerCat[cat] || [];
@@ -126,187 +197,236 @@ export default function CouncilComposer({ personas, onCountsChange }: CouncilCom
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [totalAgents, categoryWeights, categories, grouped, locked, personas, rerollKey]);
 
-  // Push counts to parent
   useEffect(() => {
     onCountsChange(computedCounts);
   }, [computedCounts, onCountsChange]);
 
-  const catCounts = useMemo(() => {
-    const catWeightArr = categories.map(c => categoryWeights[c] || 0);
-    return distributeCount(totalAgents, catWeightArr);
-  }, [totalAgents, categoryWeights, categories]);
+  const selectedSlugs = useMemo(() =>
+    new Set(Object.keys(computedCounts).filter(s => computedCounts[s] > 0)),
+    [computedCounts]
+  );
 
-  const handleCategoryWeight = useCallback((cat: string, val: number) => {
-    setCategoryWeights(prev => ({ ...prev, [cat]: val }));
+  const handleRemove = useCallback((slug: string) => {
+    setLocked(prev => ({ ...prev, [slug]: false }));
   }, []);
 
-  const toggleLock = useCallback((slug: string) => {
+  const handleAddFromModal = useCallback((slug: string) => {
+    setLocked(prev => ({ ...prev, [slug]: true }));
+  }, []);
+
+  const toggleFromMain = useCallback((slug: string) => {
     setLocked(prev => {
-      const current = prev[slug];
-      if (current === true) return { ...prev, [slug]: false }; // locked on → locked off
-      if (current === false) {
-        const next = { ...prev };
-        delete next[slug]; // locked off → unlocked (auto)
-        return next;
-      }
-      return { ...prev, [slug]: true }; // unlocked → locked on
+      const isSelected = prev[slug] === true;
+      if (isSelected) return { ...prev, [slug]: false };
+      // If currently excluded or auto, lock on
+      return { ...prev, [slug]: true };
     });
   }, []);
 
-  const selectedCount = Object.values(computedCounts).filter(c => c > 0).length;
+  const selectedCount = selectedSlugs.size;
+  const factionCount = new Set(
+    [...selectedSlugs].map(slug => personas.find(p => p.slug === slug)?.category).filter(Boolean)
+  ).size;
+
+  // Personas in active tab
+  const activeMembers = useMemo(() =>
+    grouped.get(activeTab) || [],
+    [grouped, activeTab]
+  );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
+      {/* Header */}
       <div>
         <h2 className="font-pixel text-xs mb-1" style={{ color: '#8b4513' }}>
           Assemble Your Council
         </h2>
         <p className="text-[10px]" style={{ color: '#7a6552' }}>
-          Set the size and balance. Personas are auto-picked — click any to lock or exclude.
+          Pick your council size, then curate the roster. Lock members with the sidebar or browse by faction.
         </p>
       </div>
 
-      {/* Total council size + reroll */}
-      <div className="flex items-center gap-3">
-        <label className="text-xs font-bold whitespace-nowrap" style={{ color: '#5a3a1a' }}>
-          Council Size
-        </label>
-        <input
-          type="range"
-          min={2}
-          max={20}
-          value={totalAgents}
-          onChange={e => setTotalAgents(parseInt(e.target.value))}
-          className="flex-1 accent-amber-700"
-        />
-        <span className="text-sm font-bold font-mono w-6 text-center" style={{ color: '#8b4513' }}>
-          {totalAgents}
-        </span>
-        <button
-          onClick={() => setRerollKey(k => k + 1)}
-          className="text-xs px-2 py-1 rounded border-2 font-bold hover:bg-amber-50 transition-colors"
-          style={{ borderColor: '#dbc89e', color: '#8b4513' }}
-          title="Reroll random picks"
-        >
-          Reroll
-        </button>
-      </div>
+      {/* Two-column layout */}
+      <div className="flex gap-4" style={{ minHeight: 300 }}>
+        {/* ── Left sidebar ── */}
+        <div className="w-56 flex-shrink-0 space-y-3">
+          {/* Council size slider */}
+          <div className="rounded-lg border-2 p-2.5" style={{ borderColor: '#dbc89e', backgroundColor: '#fff8e7' }}>
+            <div className="flex items-center gap-2 mb-1">
+              <label className="text-[10px] font-bold uppercase tracking-wider" style={{ color: '#b0956e' }}>
+                Council Size
+              </label>
+              <span className="text-sm font-bold font-mono ml-auto" style={{ color: '#8b4513' }}>
+                {totalAgents}
+              </span>
+            </div>
+            <input
+              type="range"
+              min={2}
+              max={20}
+              value={totalAgents}
+              onChange={e => setTotalAgents(parseInt(e.target.value))}
+              className="w-full accent-amber-700 h-1.5"
+            />
+            <button
+              onClick={() => setRerollKey(k => k + 1)}
+              className="w-full mt-1.5 text-[9px] px-2 py-1 rounded border font-bold hover:bg-amber-50 transition-colors"
+              style={{ borderColor: '#dbc89e', color: '#8b4513' }}
+            >
+              Reroll
+            </button>
+          </div>
 
-      {/* Category sliders */}
-      <div className="space-y-2">
-        {categories.map((cat, ci) => {
-          const members = grouped.get(cat) || [];
-          const isExpanded = expandedCategory === cat;
-          const catCount = catCounts[ci];
+          {/* Per-category roster */}
+          <div className="space-y-1.5 overflow-y-auto" style={{ maxHeight: 350 }}>
+            {categories.map(cat => {
+              const membersInCat = [...selectedSlugs]
+                .map(s => personas.find(p => p.slug === s))
+                .filter((p): p is PersonaInfo => p !== undefined && p.category === cat);
 
-          return (
-            <div key={cat} className="rounded-lg border-2 overflow-hidden" style={{ borderColor: '#dbc89e' }}>
-              {/* Category header + slider */}
-              <div className="px-3 py-2" style={{ backgroundColor: '#fff8e7' }}>
-                <div className="flex items-center gap-2 mb-1">
+              return (
+                <div key={cat} className="rounded-lg border p-2" style={{ borderColor: '#dbc89e' }}>
+                  <div className="text-[8px] uppercase tracking-widest font-bold mb-1" style={{ color: '#b0956e' }}>
+                    {CATEGORY_LABELS[cat] || cat}
+                    <span className="ml-1 font-mono">({membersInCat.length})</span>
+                  </div>
+
+                  <AnimatePresence mode="popLayout">
+                    {membersInCat.map(p => (
+                      <motion.div
+                        key={p.slug}
+                        layout
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        exit={{ opacity: 0, x: -10 }}
+                        transition={{ duration: 0.15 }}
+                        className="flex items-center gap-1.5 py-0.5 group"
+                      >
+                        <PixelSprite persona={p.avatar} color={p.color} size={18} />
+                        <span className="text-[9px] font-medium truncate flex-1" style={{ color: '#3d2b1f' }}>
+                          {p.name}
+                        </span>
+                        {locked[p.slug] === true && (
+                          <span className="text-[7px]">📌</span>
+                        )}
+                        <button
+                          onClick={() => handleRemove(p.slug)}
+                          className="text-[9px] opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
+                          style={{ color: '#b45309' }}
+                          title="Remove from council"
+                        >
+                          ×
+                        </button>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+
+                  {/* Add placeholder */}
                   <button
-                    onClick={() => setExpandedCategory(isExpanded ? null : cat)}
-                    className="text-[10px] uppercase tracking-widest font-bold flex-1 text-left flex items-center gap-1"
+                    onClick={() => setAddModalCategory(cat)}
+                    className="flex items-center gap-1 mt-0.5 py-0.5 text-[9px] hover:bg-amber-50 rounded px-1 w-full transition-colors"
                     style={{ color: '#b0956e' }}
                   >
-                    <span className="text-[8px]">{isExpanded ? '▼' : '▶'}</span>
-                    {CATEGORY_LABELS[cat] || cat}
+                    <span className="text-xs leading-none">+</span>
+                    <span>Add…</span>
                   </button>
-                  <span className="text-xs font-bold font-mono" style={{ color: '#8b4513' }}>
-                    {catCount}
-                  </span>
                 </div>
-                <p className="text-[10px] mb-1" style={{ color: '#9a8570', fontFamily: 'Georgia, serif' }}>
-                  {CATEGORY_DESCRIPTIONS[cat] || ''}
-                </p>
-                <input
-                  type="range"
-                  min={0}
-                  max={100}
-                  value={categoryWeights[cat] || 0}
-                  onChange={e => handleCategoryWeight(cat, parseInt(e.target.value))}
-                  className="w-full accent-amber-700 h-1.5"
-                />
-                {/* Mini avatars preview — selected ones */}
-                <div className="flex flex-wrap gap-1 mt-1.5">
-                  {members
-                    .filter(p => computedCounts[p.slug] > 0)
-                    .map(p => (
-                      <motion.button
-                        key={p.slug}
-                        onClick={() => toggleLock(p.slug)}
-                        className="relative"
-                        title={`${p.name}${locked[p.slug] === true ? ' (locked)' : locked[p.slug] === false ? ' (excluded)' : ''}`}
-                        whileTap={{ scale: 0.9 }}
-                      >
-                        <PixelSprite persona={p.avatar} color={p.color} size={22} />
-                        {locked[p.slug] === true && (
-                          <span className="absolute -top-0.5 -right-0.5 text-[7px]">📌</span>
-                        )}
-                      </motion.button>
-                    ))}
-                </div>
-              </div>
+              );
+            })}
+          </div>
+        </div>
 
-              {/* Expanded: all personas in category */}
-              <AnimatePresence>
-                {isExpanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: 'auto', opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="overflow-hidden"
+        {/* ── Main content ── */}
+        <div className="flex-1 min-w-0">
+          {/* Category tabs */}
+          <div className="flex gap-1 mb-3 flex-wrap">
+            {categories.map(cat => {
+              const isActive = activeTab === cat;
+              return (
+                <button
+                  key={cat}
+                  onClick={() => setActiveTab(cat)}
+                  className={`text-[9px] px-2.5 py-1 rounded-full border font-bold uppercase tracking-wider transition-all ${
+                    isActive ? 'border-current' : 'hover:bg-amber-50'
+                  }`}
+                  style={{
+                    color: isActive ? '#8b4513' : '#b0956e',
+                    borderColor: isActive ? '#8b4513' : '#dbc89e',
+                    backgroundColor: isActive ? '#fff8e7' : 'transparent',
+                  }}
+                >
+                  {CATEGORY_LABELS[cat] || cat}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Category description */}
+          <p className="text-[10px] mb-3" style={{ color: '#9a8570', fontFamily: 'Georgia, serif' }}>
+            {CATEGORY_DESCRIPTIONS[activeTab] || ''}
+          </p>
+
+          {/* Persona cards grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            <AnimatePresence mode="popLayout">
+              {activeMembers.map(p => {
+                const isSelected = selectedSlugs.has(p.slug);
+                const isLockedOn = locked[p.slug] === true;
+                const isExcluded = locked[p.slug] === false;
+
+                return (
+                  <motion.button
+                    key={p.slug}
+                    layout
+                    initial={{ opacity: 0, scale: 0.95 }}
+                    animate={{ opacity: isExcluded ? 0.35 : 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.95 }}
+                    onClick={() => toggleFromMain(p.slug)}
+                    className={`flex flex-col items-center gap-1.5 p-3 rounded-lg border-2 text-center transition-colors ${
+                      isSelected ? '' : 'hover:bg-amber-50/50'
+                    }`}
+                    style={{
+                      borderColor: isSelected ? p.color + '80' : '#dbc89e',
+                      backgroundColor: isSelected ? p.color + '08' : 'transparent',
+                    }}
                   >
-                    <div className="px-3 py-2 border-t grid grid-cols-2 sm:grid-cols-3 gap-2" style={{ borderColor: '#dbc89e', backgroundColor: '#fff' }}>
-                      {members.map(p => {
-                        const isSelected = (computedCounts[p.slug] || 0) > 0;
-                        const isLockedOn = locked[p.slug] === true;
-                        const isLockedOff = locked[p.slug] === false;
-                        return (
-                          <button
-                            key={p.slug}
-                            onClick={() => toggleLock(p.slug)}
-                            className={`flex items-center gap-1.5 p-1.5 rounded border text-left transition-all ${
-                              isLockedOff ? 'opacity-30' : isSelected ? 'border-current' : 'opacity-50 hover:opacity-80'
-                            }`}
-                            style={{
-                              borderColor: isSelected ? p.color + '60' : '#dbc89e',
-                              backgroundColor: isSelected ? '#fff8e7' : 'transparent',
-                            }}
-                          >
-                            <PixelSprite persona={p.avatar} color={p.color} size={28} />
-                            <div className="min-w-0 flex-1">
-                              <div className="text-[10px] font-bold truncate" style={{ color: '#3d2b1f' }}>
-                                {p.name}
-                              </div>
-                              <div className="text-[9px] leading-snug" style={{ color: '#7a6552', fontFamily: 'Georgia, serif' }}>
-                                {p.description}
-                              </div>
-                            </div>
-                            {isLockedOn && <span className="text-[8px] flex-shrink-0">📌</span>}
-                            {isLockedOff && <span className="text-[8px] flex-shrink-0">✕</span>}
-                          </button>
-                        );
-                      })}
+                    <PixelSprite persona={p.avatar} color={p.color} size={36} />
+                    <div className="text-[10px] font-bold" style={{ color: '#3d2b1f' }}>
+                      {p.name}
+                      {isLockedOn && <span className="ml-1 text-[7px]">📌</span>}
                     </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
+                    <div className="text-[9px] leading-snug" style={{ color: '#7a6552', fontFamily: 'Georgia, serif' }}>
+                      {p.description}
+                    </div>
+                  </motion.button>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </div>
       </div>
 
       {/* Summary */}
       <div className="text-center text-[10px]" style={{ color: '#7a6552' }}>
         <span className="font-bold" style={{ color: '#3d2b1f' }}>{selectedCount}</span> unique council members across{' '}
-        <span className="font-bold" style={{ color: '#3d2b1f' }}>
-          {new Set(Object.keys(computedCounts).map(slug => personas.find(p => p.slug === slug)?.category).filter(Boolean)).size}
-        </span> factions
+        <span className="font-bold" style={{ color: '#3d2b1f' }}>{factionCount}</span> factions
         {selectedCount < 2 && (
           <span className="ml-2 font-medium" style={{ color: '#b45309' }}>Need at least 2 members</span>
         )}
       </div>
+
+      {/* Add persona modal */}
+      <AnimatePresence>
+        {addModalCategory && (
+          <PersonaAddModal
+            category={addModalCategory}
+            personas={personas}
+            selectedSlugs={selectedSlugs}
+            onSelect={handleAddFromModal}
+            onClose={() => setAddModalCategory(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -24,7 +25,31 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
-const settingsFile = "settings.json"
+func dataDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		log.Fatalf("Cannot determine home directory: %v", err)
+	}
+	dir := filepath.Join(home, ".consensus-protocol")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		log.Fatalf("Cannot create data directory %s: %v", dir, err)
+	}
+	return dir
+}
+
+func migrateFile(oldPath, newPath string) {
+	if _, err := os.Stat(oldPath); err != nil {
+		return
+	}
+	if _, err := os.Stat(newPath); err == nil {
+		return // already exists at new location
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		log.Printf("Warning: could not migrate %s to %s: %v", oldPath, newPath, err)
+		return
+	}
+	log.Printf("Migrated %s → %s", oldPath, newPath)
+}
 
 func main() {
 	// Load persona registry
@@ -38,14 +63,20 @@ func main() {
 	}
 	log.Printf("Loaded %d personas", len(registry.All()))
 
+	// Migrate old files from project directory to data directory
+	dir := dataDir()
+	settingsFile := filepath.Join(dir, "settings.json")
+	migrateFile("settings.json", settingsFile)
+	migrateFile("consensus.db", filepath.Join(dir, "consensus.db"))
+
 	// Initialize LLM client — env vars first, then override with saved settings
 	cfg := llm.ConfigFromEnv()
-	cfg = loadSettingsFile(cfg)
+	cfg = loadSettingsFile(cfg, settingsFile)
 	client := llm.NewClient(cfg)
 	log.Printf("LLM endpoint: %s (model: %s)", cfg.BaseURL, cfg.Model)
 
 	// Initialize store
-	dbPath := "consensus.db"
+	dbPath := filepath.Join(dir, "consensus.db")
 	if p := os.Getenv("DB_PATH"); p != "" {
 		dbPath = p
 	}
@@ -56,10 +87,11 @@ func main() {
 	defer st.Close()
 
 	app := &App{
-		registry: registry,
-		client:   client,
-		store:    st,
-		llmCfg:   cfg,
+		registry:     registry,
+		client:       client,
+		store:        st,
+		llmCfg:       cfg,
+		settingsPath: settingsFile,
 	}
 
 	err = wails.Run(&options.App{
@@ -91,8 +123,9 @@ type App struct {
 	registry *persona.Registry
 	client   *llm.Client
 	store    *store.Store
-	mu       sync.RWMutex
-	llmCfg   llm.Config
+	mu           sync.RWMutex
+	llmCfg       llm.Config
+	settingsPath string
 
 	// Running swarm cancel function
 	swarmCancel context.CancelFunc
@@ -154,7 +187,7 @@ func (a *App) SaveSettings(s SettingsResponse) error {
 	cfg := a.llmCfg
 	a.mu.Unlock()
 
-	if err := saveSettingsFile(cfg); err != nil {
+	if err := saveSettingsFile(cfg, a.settingsPath); err != nil {
 		log.Printf("Failed to save settings: %v", err)
 		return err
 	}
@@ -296,8 +329,8 @@ func (a *App) CancelSwarm() {
 
 // --- Settings file I/O ---
 
-func loadSettingsFile(cfg llm.Config) llm.Config {
-	data, err := os.ReadFile(settingsFile)
+func loadSettingsFile(cfg llm.Config, path string) llm.Config {
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return cfg
 	}
@@ -314,11 +347,11 @@ func loadSettingsFile(cfg llm.Config) llm.Config {
 	if v, ok := saved["api_key"]; ok && v != "" {
 		cfg.APIKey = v
 	}
-	log.Printf("Loaded settings from %s: base_url=%s model=%s", settingsFile, cfg.BaseURL, cfg.Model)
+	log.Printf("Loaded settings from %s: base_url=%s model=%s", path, cfg.BaseURL, cfg.Model)
 	return cfg
 }
 
-func saveSettingsFile(cfg llm.Config) error {
+func saveSettingsFile(cfg llm.Config, path string) error {
 	data, err := json.MarshalIndent(map[string]string{
 		"base_url": cfg.BaseURL,
 		"model":    cfg.Model,
@@ -327,6 +360,6 @@ func saveSettingsFile(cfg llm.Config) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(settingsFile, data, 0600)
+	return os.WriteFile(path, data, 0600)
 }
 

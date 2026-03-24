@@ -373,13 +373,16 @@ func (s *Swarm) runRolling(ctx context.Context) error {
 				if listener.ID == speaker.ID {
 					continue
 				}
+				s.EventCh <- agent.SSEEvent{Event: "summary:listener:start", Data: map[string]any{"agent_id": listener.ID, "speaker_id": speaker.ID}}
 				messages := listener.BuildSummaryUpdateMessages(s.Question, summaries[listener.ID], speaker.Persona.Name, output.Position)
 				newSummary, err := s.client.ChatCompletion(ctx, messages)
 				if err != nil {
 					log.Printf("[swarm] Summary update failed for agent %d: %v", listener.ID, err)
+					s.EventCh <- agent.SSEEvent{Event: "summary:listener:done", Data: map[string]any{"agent_id": listener.ID}}
 					continue
 				}
 				summaries[listener.ID] = newSummary
+				s.EventCh <- agent.SSEEvent{Event: "summary:listener:done", Data: map[string]any{"agent_id": listener.ID}}
 			}
 
 			// Speaker also updates their own summary with their own position
